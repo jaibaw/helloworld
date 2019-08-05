@@ -1,0 +1,52 @@
+from mrjob.job import MRJob
+from mrjob.step import MRStep
+from itertools import combinations
+import math 
+class MovieRecommendation(MRJob):
+	
+	def steps(self):
+		return [
+			MRStep(
+				mapper=self.mapper_getusers,
+				reducer=self.reducer_commonmovies
+			),
+			MRStep(
+				mapper=self.mapper_get_similar_movies,
+				reducer=self.reducer_find_similarity
+			)
+		]
+
+	def mapper_getusers(self, _, data):
+		(userid, movieid, rating, _) = data.split(',')
+		yield userid, (movieid,float(rating))
+	
+	def reducer_commonmovies(self, userid, values):
+		yield userid , list(values)
+
+	def mapper_get_similar_movies(self, userid, movies):
+		movies = list(movies)
+		if len(movies) > 1 :
+			items = combinations(movies,2)
+			for itemA, itemB  in items:
+				movieA, ratingA = itemA
+				movieB, ratingB = itemB
+				yield (movieA,movieB), (ratingA,ratingB)
+			
+	def reducer_find_similarity(self,key,ratings):
+		
+		sum_xx, sum_xy, sum_yy, sum_x, sum_y, n = (0.0, 0.0, 0.0, 0.0, 0.0, 0)
+		for item_x, item_y in ratings:
+			sum_xx += item_x * item_x
+			sum_yy += item_y * item_y
+			sum_xy += item_x * item_y
+			sum_y += item_y
+			sum_x += item_x
+			n +=1
+		deno = math.sqrt( n * sum_xx - ( sum_x ** 2 )) * math.sqrt( n * sum_yy - ( sum_y**2 ))
+		r=0
+		if deno != 0 :
+			r = ( n * (sum_xy) - sum_x*sum_y ) / deno
+		yield ( key[0],key[1] )  ,  (n,r )
+
+if __name__ == '__main__':
+    MovieRecommendation.run()
